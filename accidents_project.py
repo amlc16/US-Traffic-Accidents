@@ -20,13 +20,13 @@ from sklearn.utils.class_weight import compute_class_weight
 # 1. CONFIG
 # ============================================================
 
-CSV_PATH = "US_Accidents_March23.csv"
+CSV_PATH = "data/US_Accidents_March23.csv"
 
 # To avoid killing your laptop, you can optionally subsample
 MAX_ROWS_FOR_PREPROCESS = None  # e.g., 2_000_000 or None for full
-MAX_ROWS_FOR_CLUSTERING = 200_000
-MAX_ROWS_FOR_DBSCAN = 50_000
-MAX_ROWS_FOR_CLASSIFICATION = 500_000
+MAX_ROWS_FOR_CLUSTERING = None
+MAX_ROWS_FOR_DBSCAN = None
+MAX_ROWS_FOR_CLASSIFICATION = None
 
 RANDOM_STATE = 42
 
