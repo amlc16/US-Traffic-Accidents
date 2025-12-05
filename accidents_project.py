@@ -2,6 +2,9 @@
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import time
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
@@ -448,9 +451,55 @@ def run_decision_tree_classification(
 
     return clf, (X_train, y_train, X_val, y_val, X_test, y_test)
 
+# ============================================================
+# 4. PLOTTING RESULTS
+# ============================================================
+
+def plot_all_results(kmeans_df, clf, X_train, y_test, y_test_pred):
+    """Generate all required plots in one function"""
+    import os
+    os.makedirs('outputs', exist_ok=True)
+
+    # 1. Confusion Matrix
+    from sklearn.metrics import confusion_matrix
+    cm = confusion_matrix(y_test, y_test_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=[1, 2, 3, 4], yticklabels=[1, 2, 3, 4])
+    plt.title('Test Confusion Matrix', fontweight='bold')
+    plt.ylabel('True Severity')
+    plt.xlabel('Predicted Severity')
+    plt.savefig('outputs/confusion_matrix.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    print("Saved: outputs/confusion_matrix.png")
+
+    # 2. Feature Importance
+    importances = clf.feature_importances_
+    indices = np.argsort(importances)[::-1][:15]
+    plt.figure(figsize=(10, 6))
+    plt.barh(range(15), importances[indices])
+    plt.yticks(range(15), [X_train.columns[i] for i in indices])
+    plt.xlabel('Importance')
+    plt.title('Top 15 Features', fontweight='bold')
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+    plt.savefig('outputs/feature_importance.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    print("Saved: outputs/feature_importance.png")
+
+    # 3. Cluster characteristics (simplified - just 3 key features)
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    for idx, feature in enumerate(['Temperature', 'Visibility', 'Hour']):
+        kmeans_df.boxplot(column=feature, by='cluster_kmeans', ax=axes[idx])
+        axes[idx].set_title(f'{feature} by Cluster')
+    plt.tight_layout()
+    plt.savefig('outputs/cluster_chars.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    print("Saved: outputs/cluster_chars.png")
+
 
 # ============================================================
-# 5. MAIN SCRIPT
+# 6. MAIN SCRIPT
 # ============================================================
 
 if __name__ == "__main__":
