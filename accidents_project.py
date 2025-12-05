@@ -504,21 +504,29 @@ def plot_all_results(kmeans_df, clf, X_train, y_test, y_test_pred):
 
 if __name__ == "__main__":
     # 1) Preprocess
+    print("\nPreprocessing")
+    start = time.time()
     df_all = base_preprocess(
         CSV_PATH,
         max_rows=MAX_ROWS_FOR_PREPROCESS,
     )
+    print(f"   Done in {time.time() - start:.1f}s")
 
     # 2) K-means clustering
+    print("\nK-means clustering")
+    start = time.time()
     kmeans, kmeans_scaler, kmeans_df, k_sil, k_db = run_kmeans_clustering(
         df_all,
         n_clusters=5,  # you can sweep this for your elbow plot
         max_rows=MAX_ROWS_FOR_CLUSTERING,
         random_state=RANDOM_STATE,
     )
+    print(f"   Done in {time.time() - start:.1f}s")
     summarize_clusters_by_severity(kmeans_df, "cluster_kmeans")
 
     # 3) DBSCAN clustering
+    print("\nDBSCAN clustering")
+    start = time.time()
     dbscan, dbscan_scaler, dbscan_df, d_sil, d_db = run_dbscan_clustering(
         df_all,
         eps=0.7,            # tune based on your experiments
@@ -526,13 +534,23 @@ if __name__ == "__main__":
         max_rows=MAX_ROWS_FOR_DBSCAN,
         random_state=RANDOM_STATE,
     )
+    print(f"   Done in {time.time() - start:.1f}s")
     summarize_clusters_by_severity(dbscan_df, "cluster_dbscan")
 
     # 4) Classification (Decision Tree baseline)
+    print("\nDecision Tree classification")
+    start = time.time()
     clf, splits = run_decision_tree_classification(
         df_all,
         max_rows=MAX_ROWS_FOR_CLASSIFICATION,
         random_state=RANDOM_STATE,
     )
+    print(f"   Done in {time.time() - start:.1f}s")
+
+    # 5) Generate plots
+    print("\nGenerating plots")
+    X_train, y_train, X_val, y_val, X_test, y_test = splits
+    y_test_pred = clf.predict(X_test)
+    plot_all_results(kmeans_df, clf, X_train, y_test, y_test_pred)
 
     print("\nPipeline finished.")
