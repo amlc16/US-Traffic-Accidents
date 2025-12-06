@@ -93,27 +93,22 @@ def balance_training_data(X_train, y_train, random_state=42):
     dfs = {c: df_train[df_train["Severity"] == c] for c in sorted(df_train["Severity"].unique())}
 
     # Choose a target size for minority classes
-    target_minority = max(len(dfs[c]) for c in dfs if c != 2)
+    minority_sizes = [len(dfs[c]) for c in dfs if c != 2]
+    target_minority = int(max(minority_sizes) * 0.5)
 
     balanced_parts = []
 
     for c, df_c in dfs.items():
         if c == 2:
-            # Downsample majority to twice the target minority
-            n_samples = min(len(df_c), 2 * target_minority)
+            # downsample majority to 1.5 * target_minority
+            n_samples = min(len(df_c), int(1.5 * target_minority))
             df_c_bal = resample(
-                df_c,
-                replace=False,
-                n_samples=n_samples,
-                random_state=random_state,
+                df_c, replace=False, n_samples=n_samples, random_state=random_state
             )
         else:
-            # Oversample minority up to target_minority
+            # oversample minority up to target_minority
             df_c_bal = resample(
-                df_c,
-                replace=True,
-                n_samples=target_minority,
-                random_state=random_state,
+                df_c, replace=True, n_samples=target_minority, random_state=random_state
             )
         balanced_parts.append(df_c_bal)
 
@@ -357,6 +352,7 @@ def base_preprocess(path: str, max_rows: int | None = None) -> pd.DataFrame:
     log_time(start, "Preprocessing")
     return df
 
+
 # ============================================================
 # DATA DESCRIPTION HELPERS
 # ============================================================
@@ -408,6 +404,7 @@ def run_kmeans_clustering(
     """
     Run K-means on a (possibly sampled) subset of df and evaluate.
     """
+    # start timer
     start = time.perf_counter()
 
     X = prepare_clustering_matrix(df)
@@ -429,13 +426,12 @@ def run_kmeans_clustering(
     )
     # Fit and predict
     labels = kmeans.fit_predict(X_scaled)
-    kmeans_time = log_time(start, "KMeans")
+    
 
     # Evaluate with internal metrics
     sil = silhouette_score(X_scaled, labels)
     db = davies_bouldin_score(X_scaled, labels)
-    print(f"KMeans silhouette score: {sil:.4f}")
-    print(f"KMeans Davies-Bouldin index: {db:.4f}")
+    
 
     # Attach labels back to df for cluster interpretation
     clustered_df = df.loc[X.index].copy()
@@ -446,6 +442,11 @@ def run_kmeans_clustering(
         clustered_df["Severity"].values,
         clustered_df["cluster_kmeans"].values,
     )
+    kmeans_time = time.perf_counter() - start
+
+    print(f"KMeans total time: {kmeans_time:.2f} seconds \n")
+    print(f"KMeans silhouette score: {sil:.4f}")
+    print(f"KMeans Davies-Bouldin index: {db:.4f}")
     print(f"KMeans mutual information I(Severity; Cluster): {mi:.4f} bits")
     print(f"H(Severity): {H_sev:.4f} bits")
     print(f"H(Severity | Cluster): {H_sev_given_cluster:.4f} bits")
@@ -702,6 +703,7 @@ def run_decision_tree_classification(
     print("Decision Tree metrics:", metrics)
     return clf, metrics
 
+#unbalanced version
 def run_mlp_classification(
     df: pd.DataFrame,
     max_rows: int | None = None,
@@ -709,7 +711,7 @@ def run_mlp_classification(
 ):
     """
     Train and evaluate an MLP (neural network) classifier to predict Severity.
-    Uses StandardScaler and a rebalanced training set.
+    Uses StandardScaler and class_weight='balanced'.
     """
     X_train, y_train, X_val, y_val, X_test, y_test = split_for_classification(
         df,
@@ -717,14 +719,20 @@ def run_mlp_classification(
         random_state=random_state,
     )
 
-    # Rebalance training data
-    X_train_bal, y_train_bal = balance_training_data(X_train, y_train, random_state=random_state)
-
-    # Scale features (fit on balanced train only)
+    # Scale features
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_bal)
+    X_train_scaled = scaler.fit_transform(X_train)
     X_val_scaled = scaler.transform(X_val)
     X_test_scaled = scaler.transform(X_test)
+
+    classes = np.unique(y_train)
+    class_weights = compute_class_weight(
+        class_weight="balanced",
+        classes=classes,
+        y=y_train,
+    )
+    class_weight_dict = {c: w for c, w in zip(classes, class_weights)}
+    print("\nMLP class weights:", class_weight_dict)
 
     mlp = MLPClassifier(
         hidden_layer_sizes=(64, 32),
@@ -733,14 +741,14 @@ def run_mlp_classification(
         alpha=1e-4,
         batch_size=256,
         learning_rate="adaptive",
-        max_iter=60,          # was 20
+        max_iter=60,
         random_state=random_state,
         verbose=True,
     )
 
     start = time.perf_counter()
-    print("\nTraining MLP (balanced data)...")
-    mlp.fit(X_train_scaled, y_train_bal)
+    print("\nTraining MLP...")
+    mlp.fit(X_train_scaled, y_train)
     mlp_time = log_time(start, "MLP training")
 
     from sklearn.metrics import accuracy_score, f1_score
@@ -772,6 +780,79 @@ def run_mlp_classification(
 
     print("MLP metrics:", metrics)
     return mlp, scaler, metrics
+
+
+#balanced version
+# def run_mlp_classification(
+#     df: pd.DataFrame,
+#     max_rows: int | None = None,
+#     random_state: int = 42,
+# ):
+#     """
+#     Train and evaluate an MLP (neural network) classifier to predict Severity.
+#     Uses StandardScaler and a rebalanced training set.
+#     """
+#     X_train, y_train, X_val, y_val, X_test, y_test = split_for_classification(
+#         df,
+#         max_rows=max_rows,
+#         random_state=random_state,
+#     )
+
+#     # Rebalance training data
+#     X_train_bal, y_train_bal = balance_training_data(X_train, y_train, random_state=random_state)
+
+#     # Scale features (fit on balanced train only)
+#     scaler = StandardScaler()
+#     X_train_scaled = scaler.fit_transform(X_train_bal)
+#     X_val_scaled = scaler.transform(X_val)
+#     X_test_scaled = scaler.transform(X_test)
+
+#     mlp = MLPClassifier(
+#         hidden_layer_sizes=(64, 32),
+#         activation="relu",
+#         solver="adam",
+#         alpha=1e-4,
+#         batch_size=256,
+#         learning_rate="adaptive",
+#         max_iter=60,
+#         random_state=random_state,
+#         verbose=True,
+#     )
+
+#     start = time.perf_counter()
+#     print("\nTraining MLP (balanced data)...")
+#     mlp.fit(X_train_scaled, y_train_bal)
+#     mlp_time = log_time(start, "MLP training")
+
+#     from sklearn.metrics import accuracy_score, f1_score
+
+#     print("\nMLP – Validation performance:")
+#     y_val_pred = mlp.predict(X_val_scaled)
+#     print(classification_report(y_val, y_val_pred, digits=4))
+#     print("Confusion matrix (val):")
+#     print(confusion_matrix(y_val, y_val_pred))
+
+#     print("\nMLP – Test performance:")
+#     y_test_pred = mlp.predict(X_test_scaled)
+#     print(classification_report(y_test, y_test_pred, digits=4))
+#     print("Confusion matrix (test):")
+#     print(confusion_matrix(y_test, y_test_pred))
+
+#     val_acc = accuracy_score(y_val, y_val_pred)
+#     val_f1_macro = f1_score(y_val, y_val_pred, average="macro")
+#     test_acc = accuracy_score(y_test, y_test_pred)
+#     test_f1_macro = f1_score(y_test, y_test_pred, average="macro")
+
+#     metrics = {
+#         "time": mlp_time,
+#         "val_accuracy": val_acc,
+#         "val_f1_macro": val_f1_macro,
+#         "test_accuracy": test_acc,
+#         "test_f1_macro": test_f1_macro,
+#     }
+
+#     print("MLP metrics:", metrics)
+#     return mlp, scaler, metrics
 
 
 # ============================================================
